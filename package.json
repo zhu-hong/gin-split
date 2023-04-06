@@ -1,0 +1,11 @@
+{
+  "name": "gin-split",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "axios": "1.3.5",
+    "vite": "4.2.1"
+  },
+  "author": "zhu-hong"
+}
