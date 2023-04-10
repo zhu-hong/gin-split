@@ -22,27 +22,37 @@ func main() {
 
 	// 上传文件
 	engine.POST("/upload", func(ctx *gin.Context) {
-		isFlag := ctx.Request.FormValue("frag")
-
 		file, _ := ctx.FormFile("file")
 
-		// 上传了整个文件
-		if len(isFlag) == 0 {
-			dst := "./uploads/" + file.Filename
-			ctx.SaveUploadedFile(file, dst)
+		// 最终文件路径
+		filePath := filepath.Join("files", ctx.Request.FormValue("hash")+filepath.Ext(ctx.Request.FormValue("fileName")))
 
+		_, err := os.Stat(filePath)
+
+		if err == nil {
 			ctx.JSON(http.StatusOK, gin.H{
-				"msg": fmt.Sprintf("'%s' uploaded!", file.Filename),
+				"msg": fmt.Sprintf("file exist in %s", filePath),
 			})
 			return
 		}
 
-		// 文件碎片
-		os.MkdirAll(filepath.Join("uploads", filenameWithoutExt(file.Filename)), os.ModePerm)
+		// 上传了整个文件
+		if ctx.Request.FormValue("frag") != "yes" {
+			os.MkdirAll(filepath.Join("files"), os.ModePerm)
 
-		index := ctx.Request.FormValue("index")
+			ctx.SaveUploadedFile(file, filePath)
 
-		ctx.SaveUploadedFile(file, filepath.Join("uploads", filenameWithoutExt(file.Filename), index))
+			ctx.JSON(http.StatusOK, gin.H{
+				"msg": filePath,
+			})
+			return
+		}
+
+		// 文件碎片目录
+		os.MkdirAll(filepath.Join("temp", ctx.Request.FormValue("hash")), os.ModePerm)
+
+		// 碎片存储路径
+		ctx.SaveUploadedFile(file, filepath.Join("temp", ctx.Request.FormValue("hash"), ctx.Request.FormValue("index")))
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"msg": fmt.Sprintf("'%s' uploaded!", file.Filename),
