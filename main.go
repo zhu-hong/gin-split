@@ -20,8 +20,8 @@ func main() {
 
 	// 程序运行的文件夹
 	exe, _ := os.Executable()
-	dir := filepath.Dir(exe)
-	println(dir)
+	exedir := filepath.Dir(exe)
+	println(exedir)
 
 	// 检查文件是否已上传或者上传了多少个分片
 	engine.POST("/check", func(ctx *gin.Context) {
@@ -39,7 +39,7 @@ func main() {
 		}
 
 		hash := json.Hash
-		savePath := filepath.Join("files", hash+filepath.Ext(json.FileName))
+		savePath := filepath.Join(exedir, "files", hash+filepath.Ext(json.FileName))
 
 		_, err := os.Stat(savePath)
 
@@ -48,13 +48,13 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{
 				"exist":  1,
 				"chunks": []string{},
-				"path":   savePath,
+				"path":   filepath.Join("files", hash+filepath.Ext(json.FileName)),
 			})
 			return
 		}
 
 		// 查看有没有切片
-		chunksPath := filepath.Join("temp", hash)
+		chunksPath := filepath.Join(exedir, "temp", hash)
 		_, err = os.Stat(chunksPath)
 
 		// 存在切片
@@ -92,29 +92,29 @@ func main() {
 
 		// 上传了整个文件
 		if ctx.Request.FormValue("frag") != "yes" {
-			savePath := filepath.Join("files", ctx.Request.FormValue("hash")+filepath.Ext(ctx.Request.FormValue("fileName")))
+			savePath := filepath.Join(exedir, "files", ctx.Request.FormValue("hash")+filepath.Ext(ctx.Request.FormValue("fileName")))
 
-			os.MkdirAll(filepath.Join("files"), os.ModePerm)
+			os.MkdirAll(filepath.Join(exedir, "files"), os.ModePerm)
 
 			ctx.SaveUploadedFile(file, savePath)
 
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": true,
-				"msg":     savePath,
+				"path":    filepath.Join("files", ctx.Request.FormValue("hash")+filepath.Ext(ctx.Request.FormValue("fileName"))),
 			})
 			return
 		}
 
 		// 文件碎片目录
-		os.MkdirAll(filepath.Join("temp", ctx.Request.FormValue("hash")), os.ModePerm)
+		os.MkdirAll(filepath.Join(exedir, "temp", ctx.Request.FormValue("hash")), os.ModePerm)
 		// 文件碎片保存路径
-		savePath := filepath.Join("temp", ctx.Request.FormValue("hash"), ctx.Request.FormValue("index"))
+		savePath := filepath.Join(exedir, "temp", ctx.Request.FormValue("hash"), ctx.Request.FormValue("index"))
 
 		ctx.SaveUploadedFile(file, savePath)
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"path":    savePath,
+			"path":    "",
 		})
 	})
 
@@ -132,7 +132,7 @@ func main() {
 			return
 		}
 
-		mergePath := filepath.Join("temp", json.Hash)
+		mergePath := filepath.Join(exedir, "temp", json.Hash)
 
 		_, err := os.Stat(mergePath)
 		// 没有这个合集
@@ -145,9 +145,8 @@ func main() {
 			return
 		}
 
-		os.MkdirAll("files", os.ModePerm)
-		savePath := filepath.Join("files", json.Hash+filepath.Ext(json.FileName))
-		println(savePath)
+		os.MkdirAll(filepath.Join(exedir, "files"), os.ModePerm)
+		savePath := filepath.Join(exedir, "files", json.Hash+filepath.Ext(json.FileName))
 
 		finFile, err := os.Create(savePath)
 		if err != nil {
@@ -171,12 +170,8 @@ func main() {
 		}
 
 		sort.Slice(fs, func(i, j int) bool {
-			index1, err1 := strconv.Atoi(fs[i].Name())
-			index2, err2 := strconv.Atoi(fs[j].Name())
-
-			if err1 != nil || err2 != nil {
-				return fs[i].Name() < fs[j].Name()
-			}
+			index1, _ := strconv.Atoi(fs[i].Name())
+			index2, _ := strconv.Atoi(fs[j].Name())
 
 			return index1 < index2
 		})
@@ -190,7 +185,7 @@ func main() {
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"path":    savePath,
+			"path":    filepath.Join("files", json.Hash+filepath.Ext(json.FileName)),
 		})
 
 		os.RemoveAll(mergePath)
@@ -198,7 +193,7 @@ func main() {
 
 	engine.GET("/files/:path", func(ctx *gin.Context) {
 		if path := ctx.Param("path"); path != "" {
-			target := filepath.Join("files", path)
+			target := filepath.Join(exedir, "files", path)
 			ctx.Header("Content-Description", "File Transfer")
 			ctx.Header("Content-Transfer-Encoding", "binary")
 			ctx.Header("Content-Disposition", "attachment; filename="+path)
