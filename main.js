@@ -2,7 +2,6 @@ import { ParallelHasher } from 'ts-md5'
 import hashWorker from 'ts-md5/dist/md5_worker?url'
 import pLimit from 'p-limit'
 import axios from 'axios'
-import { all } from 'axios'
 
 const input = document.querySelector('input')
 
@@ -17,12 +16,20 @@ input.addEventListener('change', async (e) => {
 
   if(file.size <= 1024*1024*1024) {
     const hash = await hasher.hash(file)
+
+    const checkRes = await axios.post('http://localhost:1122/check', {
+      hash,
+      fileName: file.name,
+    })
+
+    if(checkRes.data.exist === 1) return
+
     const fd = new FormData()
-    fd.append('hash', hash)
     fd.append('file', file)
+    fd.append('hash', hash)
     fd.append('fileName', file.name)
     fd.append('frag', 'no')
-    axios.post('http://localhost:1122/upload', fd, {
+    await axios.post('http://localhost:1122/upload', fd, {
       headers: {
         'Content-Type': file.type,
       },
@@ -47,7 +54,6 @@ input.addEventListener('change', async (e) => {
       forHash.push(chunk.slice(chunk.size-1024*2,chunk.length,file.type))
     }
   }
-  console.log(chunks)
   
   let second = 0
   let interval = setInterval(() => {
@@ -60,14 +66,23 @@ input.addEventListener('change', async (e) => {
   clearInterval(interval)
   second=0
 
+  const checkRes = await axios.post('http://localhost:1122/check', {
+    hash,
+    fileName: file.name,
+  })
+
+  if(checkRes.data.exist === 1) return
+
   const limit = pLimit(5)
   const reqs = chunks.map((chunk, index) => {
-    return limit(() => new Promise((resolve) => {
+    if(checkRes.data.chunks.includes(index)) return Promise.resolve('')
+
+    return limit(() => new Promise((resolve, reject) => {
       const fd = new FormData()
-      fd.append('hash', hash)
       fd.append('file', chunk)
+      fd.append('hash', hash)
       fd.append('fileName', file.name)
-      fd.append('index', index.toString())
+      fd.append('index', `${index}`)
       fd.append('frag', 'yes')
       axios.post('http://localhost:1122/upload', fd, {
         headers: {
@@ -75,6 +90,8 @@ input.addEventListener('change', async (e) => {
         },
       }).then(() => {
         resolve(fd)
+      }).catch((rea) => {
+        reject(rea)
       })
     }))
   })
@@ -88,4 +105,9 @@ input.addEventListener('change', async (e) => {
   console.log(`upload over`)
   clearInterval(interval)
   second=0
+
+  axios.post('http://localhost:1122/merge', {
+    hash,
+    fileName: file.name,
+  })
 })
