@@ -14,7 +14,11 @@ import (
 )
 
 func main() {
+	gin.SetMode(gin.ReleaseMode)
+
 	engine := gin.Default()
+
+	engine.SetTrustedProxies(nil)
 
 	engine.Use(cors.Default())
 
@@ -204,5 +208,5 @@ func main() {
 		}
 	})
 
-	engine.Run(":1122")
+	engine.Run("127.0.0.1:1122")
 }
