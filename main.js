@@ -5,16 +5,15 @@ import axios from 'axios'
 
 const input = document.querySelector('input')
 
+const hasher = new ParallelHasher(hashWorker)
+const chunkSize = 1024 * 1024 * 1024 / 4 // 分片大小
+
 input.addEventListener('change', async (e) => {
   /**
    * @type { File }
    */
   const file = e.target.files[0]
   if (!file) return;
-
-  const chunkSize = 1024 * 1024 * 1024 / 4 // 分片大小
-
-  const hasher = new ParallelHasher(hashWorker)
 
   if (file.size <= chunkSize) {
     let second = 0
