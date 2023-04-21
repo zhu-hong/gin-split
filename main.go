@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,7 +51,7 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{
 				"exist":  1,
 				"chunks": []string{},
-				"path":   filepath.Join("files", hash+filepath.Ext(json.FileName)),
+				"file":   hash + filepath.Ext(json.FileName),
 			})
 			return
 		}
@@ -65,20 +64,17 @@ func main() {
 		if err == nil {
 			files, _ := os.ReadDir(chunksPath)
 
-			chunks := []int64{}
+			chunks := []int{}
 			for _, file := range files {
-				index, err := strconv.ParseInt(file.Name(), 10, 8)
-				if err != nil {
-					log.Fatal(err.Error())
-					continue
-				}
+				index, _ := strconv.Atoi(file.Name())
+
 				chunks = append(chunks, index)
 			}
 
 			ctx.JSON(http.StatusOK, gin.H{
 				"exist":  2,
 				"chunks": chunks,
-				"path":   "",
+				"file":   "",
 			})
 			return
 		}
@@ -86,7 +82,7 @@ func main() {
 		ctx.JSON(http.StatusOK, gin.H{
 			"exist":  0,
 			"chunks": []string{},
-			"path":   "",
+			"file":   "",
 		})
 	})
 
@@ -104,7 +100,7 @@ func main() {
 
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": true,
-				"path":    filepath.Join("files", ctx.Request.FormValue("hash")+filepath.Ext(ctx.Request.FormValue("fileName"))),
+				"file":    ctx.Request.FormValue("hash") + filepath.Ext(ctx.Request.FormValue("fileName")),
 			})
 			return
 		}
@@ -118,7 +114,7 @@ func main() {
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"path":    "",
+			"file":    "",
 		})
 	})
 
@@ -143,7 +139,7 @@ func main() {
 		if err != nil {
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"path":    "",
+				"file":    "",
 				"message": "没找到文件碎片文件夹",
 			})
 			return
@@ -156,7 +152,7 @@ func main() {
 		if err != nil {
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"path":    "",
+				"file":    "",
 				"message": "创建合并文件失败",
 			})
 			return
@@ -167,7 +163,7 @@ func main() {
 		if err != nil {
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"path":    "",
+				"file":    "",
 				"message": "读取碎片文件夹失败",
 			})
 			return
@@ -189,7 +185,8 @@ func main() {
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"path":    filepath.Join("files", json.Hash+filepath.Ext(json.FileName)),
+			"file":    json.Hash + filepath.Ext(json.FileName),
+			"message": "",
 		})
 
 		os.RemoveAll(mergePath)
@@ -198,10 +195,10 @@ func main() {
 	engine.GET("/files/:path", func(ctx *gin.Context) {
 		if path := ctx.Param("path"); path != "" {
 			target := filepath.Join(exedir, "files", path)
-			ctx.Header("Content-Description", "File Transfer")
-			ctx.Header("Content-Transfer-Encoding", "binary")
-			ctx.Header("Content-Disposition", "attachment; filename="+path)
-			ctx.Header("Content-Type", "application/octet-stream")
+			// ctx.Header("Content-Description", "File Transfer")
+			// ctx.Header("Content-Transfer-Encoding", "binary")
+			// ctx.Header("Content-Disposition", "attachment; filename="+path)
+			// ctx.Header("Content-Type", "application/octet-stream")
 			ctx.File(target)
 		} else {
 			ctx.Status(http.StatusNotFound)
