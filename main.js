@@ -12,32 +12,54 @@ input.addEventListener('change', async (e) => {
   const file = e.target.files[0]
   if (!file) return;
 
+  const chunkSize = 1024 * 1024 * 1024 / 4 // 分片大小
+
   const hasher = new ParallelHasher(hashWorker)
 
-  if (file.size <= 1024 * 1024 * 1024) {
+  if (file.size <= chunkSize) {
+    let second = 0
+    let interval = setInterval(() => {
+      second++
+      console.log(second)
+    }, 1000)
+    console.log('hash start')
     const hash = await hasher.hash(file)
+    console.log(`hash over: ${hash}`)
+    second = 0
+    clearInterval(interval)
 
     const checkRes = await axios.post('http://localhost:1122/check', {
       hash,
       fileName: file.name,
     })
 
-    if (checkRes.data.exist === 1) return
+    if (checkRes.data.exist === 1) {
+      console.log(`file exist: http://127.0.0.1:1122/files/${checkRes.data.file}`)
+      return
+    }
 
     const fd = new FormData()
     fd.append('file', file)
     fd.append('hash', hash)
     fd.append('fileName', file.name)
     fd.append('frag', 'no')
-    await axios.post('http://localhost:1122/upload', fd, {
+
+    interval = setInterval(() => {
+      second++
+      console.log(second)
+    }, 1000)
+    console.log('start upload')
+    const res = await axios.post('http://localhost:1122/upload', fd, {
       headers: {
         'Content-Type': file.type,
       },
     })
+    second = 0
+    clearInterval(interval)
+    console.log(`upload over: http://127.0.0.1:1122/files/${res.data.file}`)
     return
   }
 
-  const chunkSize = 1024 * 1024 * 1024 / 4 // 分片大小
   const chunkLen = Math.ceil(file.size / chunkSize)
   const chunks = []
   const forHash = []
@@ -60,9 +82,9 @@ input.addEventListener('change', async (e) => {
     second++
     console.log(second)
   }, 1000)
-  console.log('start calc hash')
+  console.log('hash start')
   const hash = await hasher.hash(new Blob(forHash))
-  console.log(`hash calc over: ${hash}`)
+  console.log(`hash over: ${hash}`)
   clearInterval(interval)
   second = 0
 
@@ -71,7 +93,10 @@ input.addEventListener('change', async (e) => {
     fileName: file.name,
   })
 
-  if (checkRes.data.exist === 1) return
+  if (checkRes.data.exist === 1) {
+    console.log(`file exist: http://127.0.0.1:1122/files/${checkRes.data.file}`)
+    return
+  }
 
   const limit = pLimit(5)
   const reqs = chunks.map((chunk, index) => {
@@ -100,14 +125,22 @@ input.addEventListener('change', async (e) => {
     second++
     console.log(second)
   }, 1000)
-  console.log('start upload')
+  console.log('upload start')
   await Promise.all(reqs)
   console.log(`upload over`)
   clearInterval(interval)
   second = 0
 
-  axios.post('http://localhost:1122/merge', {
+  interval = setInterval(() => {
+    second++
+    console.log(second)
+  }, 1000)
+  console.log('merge start')
+  const res = await axios.post('http://localhost:1122/merge', {
     hash,
     fileName: file.name,
   })
+  console.log(`merge over: http://127.0.0.1:1122/files/${res.data.file}`)
+  second = 0
+  clearInterval(interval)
 })
