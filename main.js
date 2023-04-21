@@ -10,11 +10,11 @@ input.addEventListener('change', async (e) => {
    * @type { File }
    */
   const file = e.target.files[0]
-  if(!file) return;
+  if (!file) return;
 
   const hasher = new ParallelHasher(hashWorker)
 
-  if(file.size <= 1024*1024*1024) {
+  if (file.size <= 1024 * 1024 * 1024) {
     const hash = await hasher.hash(file)
 
     const checkRes = await axios.post('http://localhost:1122/check', {
@@ -22,7 +22,7 @@ input.addEventListener('change', async (e) => {
       fileName: file.name,
     })
 
-    if(checkRes.data.exist === 1) return
+    if (checkRes.data.exist === 1) return
 
     const fd = new FormData()
     fd.append('file', file)
@@ -41,20 +41,20 @@ input.addEventListener('change', async (e) => {
   const chunkLen = Math.ceil(file.size / chunkSize)
   const chunks = []
   const forHash = []
-  
+
   for (let count = 0; count < chunkLen; count++) {
-    const chunk = file.slice(chunkSize*count,chunkSize*(count+1),file.type)
+    const chunk = file.slice(chunkSize * count, chunkSize * (count + 1), file.type)
     chunks.push(chunk)
-    if(count === 0 || count === chunkLen - 1) {
+    if (count === 0 || count === chunkLen - 1) {
       forHash.push(chunk)
     } else {
       let center = Math.ceil(chunk.size / 2)
-      forHash.push(chunk.slice(0,1024*2,file.type))
-      forHash.push(chunk.slice(center-1024,center+1024,file.type))
-      forHash.push(chunk.slice(chunk.size-1024*2,chunk.length,file.type))
+      forHash.push(chunk.slice(0, 1024 * 2, file.type))
+      forHash.push(chunk.slice(center - 1024, center + 1024, file.type))
+      forHash.push(chunk.slice(chunk.size - 1024 * 2, chunk.length, file.type))
     }
   }
-  
+
   let second = 0
   let interval = setInterval(() => {
     second++
@@ -64,18 +64,18 @@ input.addEventListener('change', async (e) => {
   const hash = await hasher.hash(new Blob(forHash))
   console.log(`hash calc over: ${hash}`)
   clearInterval(interval)
-  second=0
+  second = 0
 
   const checkRes = await axios.post('http://localhost:1122/check', {
     hash,
     fileName: file.name,
   })
 
-  if(checkRes.data.exist === 1) return
+  if (checkRes.data.exist === 1) return
 
   const limit = pLimit(5)
   const reqs = chunks.map((chunk, index) => {
-    if(checkRes.data.chunks.includes(index)) return Promise.resolve('')
+    if (checkRes.data.chunks.includes(index)) return Promise.resolve('')
 
     return limit(() => new Promise((resolve, reject) => {
       const fd = new FormData()
@@ -104,7 +104,7 @@ input.addEventListener('change', async (e) => {
   await Promise.all(reqs)
   console.log(`upload over`)
   clearInterval(interval)
-  second=0
+  second = 0
 
   axios.post('http://localhost:1122/merge', {
     hash,
