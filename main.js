@@ -27,13 +27,15 @@ input.addEventListener('change', async (e) => {
     second = 0
     clearInterval(interval)
 
-    const checkRes = await axios.post('http://localhost:1122/check', {
-      hash,
-      fileName: file.name,
+    const checkRes = await axios.get('http://localhost:1122/CheckFile', {
+      params: {
+        hash,
+        fileName: file.name,
+      },
     })
 
     if (checkRes.data.exist === 1) {
-      console.log(`file exist: http://127.0.0.1:1122/files/${checkRes.data.file}`)
+      console.log(`file exist: http://127.0.0.1:1122/File/${checkRes.data.file}`)
       return
     }
 
@@ -48,14 +50,14 @@ input.addEventListener('change', async (e) => {
       console.log(second)
     }, 1000)
     console.log('start upload')
-    const res = await axios.post('http://localhost:1122/upload', fd, {
+    const res = await axios.post('http://localhost:1122/File', fd, {
       headers: {
         'Content-Type': file.type,
       },
     })
     second = 0
     clearInterval(interval)
-    console.log(`upload over: http://127.0.0.1:1122/files/${res.data.file}`)
+    console.log(`upload over: http://127.0.0.1:1122/File/${res.data.file}`)
     return
   }
 
@@ -87,13 +89,15 @@ input.addEventListener('change', async (e) => {
   clearInterval(interval)
   second = 0
 
-  const checkRes = await axios.post('http://localhost:1122/check', {
-    hash,
-    fileName: file.name,
+  const checkRes = await axios.get('http://localhost:1122/CheckFile', {
+    params: {
+      hash,
+      fileName: file.name,
+    },
   })
 
   if (checkRes.data.exist === 1) {
-    console.log(`file exist: http://127.0.0.1:1122/files/${checkRes.data.file}`)
+    console.log(`file exist: http://127.0.0.1:1122/File/${checkRes.data.file}`)
     return
   }
 
@@ -108,7 +112,7 @@ input.addEventListener('change', async (e) => {
       fd.append('fileName', file.name)
       fd.append('index', `${index}`)
       fd.append('frag', 'yes')
-      axios.post('http://localhost:1122/upload', fd, {
+      axios.post('http://localhost:1122/File', fd, {
         headers: {
           'Content-Type': file.type,
         },
@@ -135,11 +139,11 @@ input.addEventListener('change', async (e) => {
     console.log(second)
   }, 1000)
   console.log('merge start')
-  const res = await axios.post('http://localhost:1122/merge', {
+  const res = await axios.post('http://localhost:1122/MergeFile', {
     hash,
     fileName: file.name,
   })
-  console.log(`merge over: http://127.0.0.1:1122/files/${res.data.file}`)
+  console.log(`merge over: http://127.0.0.1:1122/File/${res.data.file}`)
   second = 0
   clearInterval(interval)
 })

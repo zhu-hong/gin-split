@@ -27,22 +27,22 @@ func main() {
 	println(exedir)
 
 	// 检查文件是否已上传或者上传了多少个分片
-	engine.POST("/check", func(ctx *gin.Context) {
-		type CheckPaylod struct {
-			Hash     string `json:"hash"`
-			FileName string `json:"fileName"`
+	engine.GET("/CheckFile", func(ctx *gin.Context) {
+		type ChunkPaylod struct {
+			Hash     string `form:"hash" binding:"required"`
+			FileName string `form:"fileName" binding:"required"`
 		}
 
-		var json CheckPaylod
-		if err := ctx.ShouldBindJSON(&json); err != nil {
+		var paylod ChunkPaylod
+		if err := ctx.ShouldBindQuery(&paylod); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
+				"message": err.Error(),
 			})
 			return
 		}
 
-		hash := json.Hash
-		savePath := filepath.Join(exedir, "files", hash+filepath.Ext(json.FileName))
+		hash := paylod.Hash
+		savePath := filepath.Join(exedir, "files", hash+filepath.Ext(paylod.FileName))
 
 		_, err := os.Stat(savePath)
 
@@ -51,7 +51,7 @@ func main() {
 			ctx.JSON(http.StatusOK, gin.H{
 				"exist":  1,
 				"chunks": []string{},
-				"file":   hash + filepath.Ext(json.FileName),
+				"file":   hash + filepath.Ext(paylod.FileName),
 			})
 			return
 		}
@@ -87,16 +87,29 @@ func main() {
 	})
 
 	// 上传文件
-	engine.POST("/upload", func(ctx *gin.Context) {
+	engine.POST("/File", func(ctx *gin.Context) {
 		file, _ := ctx.FormFile("file")
+		index := ctx.Request.FormValue("index")
 
 		// 上传了整个文件
-		if ctx.Request.FormValue("frag") != "yes" {
+		if len(index) == 0 {
 			savePath := filepath.Join(exedir, "files", ctx.Request.FormValue("hash")+filepath.Ext(ctx.Request.FormValue("fileName")))
 
-			os.MkdirAll(filepath.Join(exedir, "files"), os.ModePerm)
+			err := os.MkdirAll(filepath.Join(exedir, "files"), os.ModePerm)
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
 
-			ctx.SaveUploadedFile(file, savePath)
+			err = ctx.SaveUploadedFile(file, savePath)
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"message": err.Error(),
+				})
+				return
+			}
 
 			ctx.JSON(http.StatusOK, gin.H{
 				"success": true,
@@ -106,11 +119,23 @@ func main() {
 		}
 
 		// 文件碎片目录
-		os.MkdirAll(filepath.Join(exedir, "temp", ctx.Request.FormValue("hash")), os.ModePerm)
+		err := os.MkdirAll(filepath.Join(exedir, "temp", ctx.Request.FormValue("hash")), os.ModePerm)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
 		// 文件碎片保存路径
-		savePath := filepath.Join(exedir, "temp", ctx.Request.FormValue("hash"), ctx.Request.FormValue("index"))
+		savePath := filepath.Join(exedir, "temp", ctx.Request.FormValue("hash"), index)
 
-		ctx.SaveUploadedFile(file, savePath)
+		err = ctx.SaveUploadedFile(file, savePath)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": err.Error(),
+			})
+			return
+		}
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"success": true,
@@ -118,41 +143,44 @@ func main() {
 		})
 	})
 
-	engine.POST("/merge", func(ctx *gin.Context) {
+	// 合并文件
+	engine.POST("/MergeFile", func(ctx *gin.Context) {
 		type MergePaylod struct {
-			Hash     string `json:"hash"`
-			FileName string `json:"fileName"`
+			Hash     string `json:"hash" binding:"required"`
+			FileName string `json:"fileName" binding:"required"`
 		}
 
-		var json MergePaylod
-		if err := ctx.ShouldBindJSON(&json); err != nil {
+		var paylod MergePaylod
+		if err := ctx.ShouldBindJSON(&paylod); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
+				"message": err.Error(),
 			})
 			return
 		}
 
-		mergePath := filepath.Join(exedir, "temp", json.Hash)
+		mergePath := filepath.Join(exedir, "temp", paylod.Hash)
 
 		_, err := os.Stat(mergePath)
 		// 没有这个合集
 		if err != nil {
-			ctx.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"file":    "",
+			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"message": "没找到文件碎片文件夹",
 			})
 			return
 		}
 
-		os.MkdirAll(filepath.Join(exedir, "files"), os.ModePerm)
-		savePath := filepath.Join(exedir, "files", json.Hash+filepath.Ext(json.FileName))
+		err = os.MkdirAll(filepath.Join(exedir, "files"), os.ModePerm)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": "文件保存文件夹创建失败",
+			})
+			return
+		}
+		savePath := filepath.Join(exedir, "files", paylod.Hash+filepath.Ext(paylod.FileName))
 
 		finFile, err := os.Create(savePath)
 		if err != nil {
-			ctx.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"file":    "",
+			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"message": "创建合并文件失败",
 			})
 			return
@@ -161,45 +189,65 @@ func main() {
 
 		fs, err := os.ReadDir(mergePath)
 		if err != nil {
-			ctx.JSON(http.StatusOK, gin.H{
-				"success": false,
-				"file":    "",
+			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"message": "读取碎片文件夹失败",
 			})
 			return
 		}
 
 		sort.Slice(fs, func(i, j int) bool {
-			index1, _ := strconv.Atoi(fs[i].Name())
-			index2, _ := strconv.Atoi(fs[j].Name())
+			index1, err1 := strconv.Atoi(fs[i].Name())
+			index2, err2 := strconv.Atoi(fs[j].Name())
+
+			if err1 != nil || err2 != nil {
+				return fs[i].Name() < fs[j].Name()
+			}
 
 			return index1 < index2
 		})
 
 		for _, f := range fs {
-			file, _ := os.Open(filepath.Join(mergePath, f.Name()))
+			file, err := os.Open(filepath.Join(mergePath, f.Name()))
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"message": "文件碎片" + paylod.FileName + f.Name() + "读取失败",
+				})
+				return
+			}
 			defer file.Close()
 
-			io.Copy(finFile, file)
+			_, err = io.Copy(finFile, file)
+			if err != nil {
+				ctx.JSON(http.StatusInternalServerError, gin.H{
+					"message": "文件碎片" + paylod.FileName + f.Name() + "合并失败",
+				})
+				return
+			}
 		}
 
 		ctx.JSON(http.StatusOK, gin.H{
 			"success": true,
-			"file":    json.Hash + filepath.Ext(json.FileName),
+			"file":    paylod.Hash + filepath.Ext(paylod.FileName),
 			"message": "",
 		})
 
 		os.RemoveAll(mergePath)
 	})
 
-	engine.GET("/files/:path", func(ctx *gin.Context) {
+	engine.GET("/File/:path", func(ctx *gin.Context) {
 		if path := ctx.Param("path"); path != "" {
-			target := filepath.Join(exedir, "files", path)
+			file := filepath.Join(exedir, "files", path)
+
+			_, err := os.Stat(file)
+			if err != nil {
+				ctx.Status(http.StatusNotFound)
+				return
+			}
 			// ctx.Header("Content-Description", "File Transfer")
 			// ctx.Header("Content-Transfer-Encoding", "binary")
 			// ctx.Header("Content-Disposition", "attachment; filename="+path)
 			// ctx.Header("Content-Type", "application/octet-stream")
-			ctx.File(target)
+			ctx.File(file)
 		} else {
 			ctx.Status(http.StatusNotFound)
 		}
